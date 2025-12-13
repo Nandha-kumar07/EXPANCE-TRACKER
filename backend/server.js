@@ -4,6 +4,8 @@ import mongoose from "mongoose";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
+import { OAuth2Client } from "google-auth-library";
 
 dotenv.config();
 
@@ -49,6 +51,14 @@ const userSchema = new mongoose.Schema(
         amount: { type: Number, required: true, default: 0 },
       },
     ],
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationToken: String,
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+    googleId: String,
   },
   { timestamps: true }
 );
@@ -361,6 +371,259 @@ app.delete("/api/transactions/:id", authMiddleware, async (req, res) => {
     return res.json({ message: "Transaction removed" });
   } catch (error) {
     console.error("Delete transaction error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// 📝 Note Schema & Model
+const noteSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    tags: [String],
+    isPinned: {
+      type: Boolean,
+      default: false,
+    },
+    color: {
+      type: String,
+      default: "#ffffff", // Default white, can be changed for UI
+    },
+  },
+  { timestamps: true }
+);
+
+const Note = mongoose.model("Note", noteSchema);
+
+// 📝 Note Routes
+
+// Create Note
+app.post("/api/notes", authMiddleware, async (req, res) => {
+  try {
+    const { title, content, tags, color, isPinned } = req.body;
+
+    if (!title || !content) {
+      return res.status(400).json({ message: "Title and content are required" });
+    }
+
+    const note = await Note.create({
+      userId: req.user.id,
+      title,
+      content,
+      tags: tags || [],
+      color: color || "#1e293b", // Default dark theme card color
+      isPinned: isPinned || false,
+    });
+
+    return res.status(201).json(note);
+  } catch (error) {
+    console.error("Create note error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get All Notes for User
+app.get("/api/notes", authMiddleware, async (req, res) => {
+  try {
+    // Sort by pinned first, then by date descending
+    const notes = await Note.find({ userId: req.user.id }).sort({
+      isPinned: -1,
+      updatedAt: -1,
+    });
+    return res.json(notes);
+  } catch (error) {
+    console.error("Get notes error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update Note
+app.put("/api/notes/:id", authMiddleware, async (req, res) => {
+  try {
+    const { title, content, tags, color, isPinned } = req.body;
+    const note = await Note.findById(req.params.id);
+
+    if (!note) {
+      return res.status(404).json({ message: "Note not found" });
+    }
+
+    if (note.userId.toString() !== req.user.id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
+    note.title = title || note.title;
+    note.content = content || note.content;
+    note.tags = tags || note.tags;
+    note.color = color || note.color;
+    note.isPinned = isPinned !== undefined ? isPinned : note.isPinned;
+
+    await note.save();
+    return res.json(note);
+  } catch (error) {
+    console.error("Update note error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// 📧 Email Transporter
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Helper to send email
+const sendEmail = async (to, subject, text) => {
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    });
+    console.log(`📧 Email sent to ${to}`);
+  } catch (error) {
+    console.error("❌ Email error:", error);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// 🔐 Auth Routes (Google & Email)
+// -----------------------------------------------------------------------------
+
+// Google Sign-In
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+app.post("/api/auth/google", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    // Verify Access Token (not ID Token)
+    const tokenInfo = await client.getTokenInfo(token);
+    const { email } = tokenInfo;
+
+    // Get user profile info (name, picture) using the access token
+    const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
+    const data = await response.json();
+    const { name, sub } = data;
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = sub;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name,
+        email,
+        password: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
+        googleId: sub,
+        isVerified: true, // Google users are verified by default
+      });
+    }
+
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token: jwtToken, user: { id: user._id, name: user.name, email: user.email, budgets: user.budgets } });
+
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    return res.status(401).json({ message: "Google Authentication Failed" });
+  }
+});
+
+// Email Verification
+app.post("/api/auth/verify-request", async (req, res) => {
+  // Logic to send verification token (random string) via email
+  // Pending implementation based on user flow preference
+  res.status(501).json({ message: "Not implemented yet" });
+});
+
+// Forgot Password
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Generate reset token
+    const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    await user.save();
+
+    // Send email
+    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+    await sendEmail(user.email, "Password Reset Request", `Click here to reset your password: ${resetUrl}`);
+
+    return res.json({ message: "Password reset link sent to email" });
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Reset Password
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({
+      _id: decoded.id,
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset Password Error:", error);
+    return res.status(400).json({ message: "Invalid token" });
+  }
+});
+
+// Delete Note
+app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
+  try {
+    const note = await Note.findById(req.params.id);
+
+    if (!note) {
+      return res.status(404).json({ message: "Note not found" });
+    }
+
+    if (note.userId.toString() !== req.user.id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
+    await note.deleteOne();
+    return res.json({ message: "Note deleted" });
+  } catch (error) {
+    console.error("Delete note error:", error.message);
     return res.status(500).json({ message: "Server error" });
   }
 });

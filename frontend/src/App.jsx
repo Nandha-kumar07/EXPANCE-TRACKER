@@ -8,6 +8,9 @@ import Reports from "./pages/Reports";
 import Dashboard from "./pages/Dashboard";
 import Budgets from "./pages/Budgets";
 import Transactions from "./pages/Transactions";
+import Notes from "./pages/Notes";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 import { useAuth } from "./context/AuthContext";
 
@@ -27,6 +30,8 @@ function App() {
         />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
         {/* Dashboard Routes */}
         <Route
@@ -42,6 +47,7 @@ function App() {
           <Route path="overview" element={<Dashboard />} />
           <Route path="budgets" element={<Budgets />} />
           <Route path="transactions" element={<Transactions />} />
+          <Route path="notes" element={<Notes />} />
           <Route index element={<Navigate to="overview" replace />} />
         </Route>
 

@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 
 export default function DashboardLayout() {
     const location = useLocation();
-    const [user] = useState({
-        name: "Alex Doe",
-        email: "alex.doe@example.com",
-        avatar: "https://ui-avatars.com/api/?name=Alex+Doe&background=c7d2fe&color=3730a3"
-    });
+    const { user, logout } = useAuth();
+
+    // Fallback if user is not fully loaded yet (though protected route handles it)
+    const displayName = user?.name || "User";
+    const displayEmail = user?.email || "user@example.com";
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0ea5e9&color=fff`;
 
     const NAV_ITEMS = [
         { label: "Profile", icon: "user", path: "/dashboard/profile" },
@@ -21,13 +22,18 @@ export default function DashboardLayout() {
             {/* Sidebar */}
             <aside className="w-64 border-r border-slate-800 flex flex-col fixed h-full left-0 top-0 bg-[#0f172a] z-20">
 
+                {/* Logo */}
+                <div className="p-6 pb-0">
+                    <h1 className="text-2xl font-black text-white tracking-tighter">ExpenseTracker</h1>
+                </div>
+
                 {/* User Profile Header (New Design) */}
                 <div className="p-6 border-b border-slate-800/50">
                     <div className="flex items-center gap-3">
-                        <img src={user.avatar} alt="User" className="w-10 h-10 rounded-full bg-slate-700 ring-2 ring-slate-800" />
+                        <img src={avatarUrl} alt="User" className="w-10 h-10 rounded-full bg-slate-700 ring-2 ring-slate-800" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white truncate">{user.name}</p>
-                            <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                            <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                            <p className="text-xs text-slate-400 truncate">{displayEmail}</p>
                         </div>
                     </div>
                 </div>
@@ -39,6 +45,7 @@ export default function DashboardLayout() {
                         { label: "Transactions", icon: "list", path: "/dashboard/transactions" },
                         { label: "Reports", icon: "chart", path: "/dashboard/reports" },
                         { label: "Budgets", icon: "pie", path: "/dashboard/budgets" },
+                        { label: "Notes", icon: "note", path: "/dashboard/notes" },
                         { label: "Settings", icon: "cog", path: "/dashboard/profile" }, // Mapping Settings to Profile for now
                     ].map((item) => {
                         const isActive = location.pathname.includes(item.path);
@@ -68,6 +75,9 @@ export default function DashboardLayout() {
                                     {item.icon === 'cog' && (
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     )}
+                                    {item.icon === 'note' && (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    )}
                                 </span>
                                 <span className="font-medium text-sm">{item.label}</span>
                             </Link>
@@ -81,7 +91,10 @@ export default function DashboardLayout() {
                         <svg className="w-5 h-5 text-slate-500 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span className="font-medium text-sm text-white">Help</span>
                     </button>
-                    <button className="flex items-center gap-3 px-3 py-2 w-full text-slate-400 hover:text-white rounded-lg transition-colors group">
+                    <button
+                        onClick={logout}
+                        className="flex items-center gap-3 px-3 py-2 w-full text-slate-400 hover:text-white rounded-lg transition-colors group"
+                    >
                         <svg className="w-5 h-5 text-slate-500 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                         <span className="font-medium text-sm text-white">Logout</span>
                     </button>

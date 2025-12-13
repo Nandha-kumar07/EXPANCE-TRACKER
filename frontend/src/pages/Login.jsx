@@ -5,6 +5,9 @@ import { useAuth } from "../context/AuthContext";
 import AuthLayout from "../components/AuthLayout";
 import API from "../api";
 
+
+import { useGoogleLogin } from '@react-oauth/google';
+
 export default function Login() {
   const [formData, setFormData] = useState({
     email: "",
@@ -17,6 +20,7 @@ export default function Login() {
   const { login } = useAuth();
 
   const validateForm = () => {
+    // ... (rest of validation same)
     const newErrors = {};
     if (!formData.email) {
       newErrors.email = "Email is required";
@@ -64,16 +68,25 @@ export default function Login() {
       ...prev,
       [name]: type === "checkbox" ? checked : value
     }));
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Handle Google OAuth here
-    alert("Google login would be implemented here");
-  };
+  const loginGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        const { data } = await API.post("/auth/google", { token: tokenResponse.access_token });
+        login(data.token, data.user);
+        navigate("/dashboard");
+      } catch (err) {
+        console.error("Google Auth API Error", err);
+        setErrors({ email: "Google Login Failed" });
+      }
+    },
+    onError: () => setErrors({ email: "Google Login Failed" }),
+  });
+
 
   return (
     <AuthLayout
@@ -140,12 +153,12 @@ export default function Login() {
               <span className="text-dark-600 text-sm font-medium">Remember me</span>
             </label>
 
-            <button
-              type="button"
+            <Link
+              to="/forgot-password"
               className="text-primary-600 hover:text-primary-800 text-sm font-semibold hover:underline"
             >
               Forgot password?
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -178,7 +191,7 @@ export default function Login() {
 
         <button
           type="button"
-          onClick={handleGoogleLogin}
+          onClick={() => loginGoogle()}
           className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-lg shadow-sm px-6 py-3 text-sm font-medium text-dark-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all"
         >
           <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
