@@ -1,20 +1,129 @@
-import { useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { useState, useEffect } from 'react';
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import API from '../api';
 
 export default function Reports() {
     const [activeTab, setActiveTab] = useState('This Month');
+    const [transactions, setTransactions] = useState([]);
+    const [categoryData, setCategoryData] = useState([]);
+    const [totalSpending, setTotalSpending] = useState(0);
+    const [budgets, setBudgets] = useState([]);
+    const [budgetStatus, setBudgetStatus] = useState([]);
 
-    // Dummy Data for Donut Chart
-    const categoryData = [
-        { name: 'Food', value: 35, color: '#10b981' }, // green-500
-        { name: 'Shopping', value: 25, color: '#f59e0b' }, // amber-500
-        { name: 'Transport', value: 15, color: '#0ea5e9' }, // sky-500
-        { name: 'Utilities', value: 10, color: '#6366f1' }, // indigo-500
-        { name: 'Health', value: 8, color: '#3b82f6' }, // blue-500
-        { name: 'Other', value: 7, color: '#64748b' }, // slate-500
-    ];
+    const COLORS = ['#10b981', '#f59e0b', '#0ea5e9', '#6366f1', '#3b82f6', '#64748b'];
 
-    // Dummy Data for Logic Chart
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    useEffect(() => {
+        if (transactions.length > 0 || budgets.length > 0) {
+            processData(transactions, budgets);
+        }
+    }, [activeTab, transactions, budgets]);
+
+    const fetchData = async () => {
+        try {
+            const [txRes, budgetRes] = await Promise.all([
+                API.get('/transactions'),
+                API.get('/budgets')
+            ]);
+
+            setTransactions(txRes.data);
+            setBudgets(budgetRes.data);
+            // processData call moved to useEffect to react to activeTab changes
+        } catch (error) {
+            console.error("Failed to fetch report data", error);
+        }
+    };
+
+    const processData = (txs, budgetList) => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const filteredTxs = txs.filter(tx => {
+            const txDate = new Date(tx.date);
+            const txMonth = txDate.getMonth();
+            const txYear = txDate.getFullYear();
+
+            if (activeTab === 'This Month') {
+                return txMonth === currentMonth && txYear === currentYear;
+            } else if (activeTab === 'Last 3 Months') {
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(now.getMonth() - 3);
+                return txDate >= threeMonthsAgo && txDate <= now;
+            } else if (activeTab === 'This Year') {
+                return txYear === currentYear;
+            } else if (activeTab === 'Last Year') {
+                return txYear === currentYear - 1;
+            }
+            return true;
+        });
+
+        let spending = 0;
+        const catMap = {}; // Total spending per category
+
+        filteredTxs.forEach(tx => {
+            if (tx.type === 'expense') {
+                const amt = Number(tx.amount);
+                spending += amt;
+                if (catMap[tx.category]) {
+                    catMap[tx.category] += amt;
+                } else {
+                    catMap[tx.category] = amt;
+                }
+            }
+        });
+
+        setTotalSpending(spending);
+
+        // Prepare Donut Chart Data
+        const catData = Object.keys(catMap).map((cat, index) => ({
+            name: cat,
+            value: catMap[cat],
+            color: COLORS[index % COLORS.length]
+        }));
+        setCategoryData(catData);
+
+        // Prepare Budget Adherence Data
+        // budgetList = [{ category: 'Groceries', amount: 5000 }, ...]
+        const budgetAdherence = budgetList.map(b => {
+            const current = catMap[b.category] || 0;
+            const max = b.amount;
+            const percentage = Math.min((current / max) * 100, 100);
+
+            let status = "On Track";
+            let color = "bg-green-500";
+            let textColor = "text-green-500";
+
+            if (percentage >= 100) {
+                status = "Over Budget";
+                color = "bg-red-500";
+                textColor = "text-red-500";
+            } else if (percentage > 80) {
+                status = "Nearing Limit";
+                color = "bg-amber-500";
+                textColor = "text-amber-500";
+            } else {
+                status = "Under Budget";
+            }
+
+            return {
+                name: b.category,
+                current,
+                max,
+                percentage,
+                status,
+                color,
+                textColor
+            };
+        });
+
+        setBudgetStatus(budgetAdherence);
+    };
+
+    // Dummy Trend Data - In a real app, aggregation by month from txs date
     const trendData = [
         { name: 'Jan', value: 2400 },
         { name: 'Feb', value: 3800 },
@@ -22,15 +131,6 @@ export default function Reports() {
         { name: 'Apr', value: 4500 },
         { name: 'May', value: 2100 },
         { name: 'Jun', value: 5800 },
-    ];
-
-    const BUDGETS = [
-        { name: "Groceries", current: 250, max: 400, color: "bg-green-500", text: "text-green-500", status: "You're under budget!" },
-        { name: "Shopping", current: 190, max: 200, color: "bg-amber-500", text: "text-amber-500", status: "Nearing budget limit." },
-        { name: "Entertainment", current: 250, max: 150, color: "bg-red-500", text: "text-red-500", status: "You've gone over budget." },
-        { name: "Utilities", current: 80, max: 150, color: "bg-green-500", text: "text-green-500", status: "You're under budget!" },
-        { name: "Transport", current: 100, max: 120, color: "bg-amber-500", text: "text-amber-500", status: "Nearing budget limit." },
-        { name: "Health", current: 50, max: 300, color: "bg-green-500", text: "text-green-500", status: "You're under budget!" }
     ];
 
     return (
@@ -49,8 +149,8 @@ export default function Reports() {
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab
-                                ? 'bg-primary-600 text-white shadow-lg'
-                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            ? 'bg-primary-600 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
                             }`}
                     >
                         {tab}
@@ -68,7 +168,7 @@ export default function Reports() {
                     <div className="mb-6">
                         <h3 className="text-lg font-semibold text-white">Spending by Category</h3>
                         <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-3xl font-bold text-white">$2,450.75</span>
+                            <span className="text-3xl font-bold text-white">₹{totalSpending.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                             <span className="text-sm font-medium text-green-500 flex items-center">
                                 <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
                                 +5.2%
@@ -96,7 +196,7 @@ export default function Reports() {
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <span className="text-2xl font-bold text-white">6</span>
+                                <span className="text-2xl font-bold text-white">{categoryData.length}</span>
                                 <span className="text-xs text-slate-500">Categories</span>
                             </div>
                         </div>
@@ -106,7 +206,7 @@ export default function Reports() {
                             {categoryData.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-2">
                                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
-                                    <span className="text-xs font-medium text-slate-300">{item.name} ({item.value}%)</span>
+                                    <span className="text-xs font-medium text-slate-300">{item.name} ({totalSpending > 0 ? Math.round((item.value / totalSpending) * 100) : 0}%)</span>
                                 </div>
                             ))}
                         </div>
@@ -118,7 +218,7 @@ export default function Reports() {
                     <div className="mb-6">
                         <h3 className="text-lg font-semibold text-white">Spending Trend</h3>
                         <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-3xl font-bold text-white">$5,800.00</span>
+                            <span className="text-3xl font-bold text-white">₹5,800.00</span>
                             <span className="text-sm font-medium text-red-500 flex items-center">
                                 <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
                                 -1.8%
@@ -148,7 +248,6 @@ export default function Reports() {
                                     fillOpacity={1}
                                     fill="url(#colorValue)"
                                 />
-                                {/* Hidden Axes for pure trend look, or custom minimal ones */}
                                 <XAxis dataKey="name" hide={false} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -160,28 +259,31 @@ export default function Reports() {
             <div>
                 <h2 className="text-xl font-bold text-white mb-4">Budget Adherence</h2>
                 <div className="bg-[#121b2e]/50 border border-slate-800/60 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {BUDGETS.map((budget, index) => {
-                        const percentage = Math.min((budget.current / budget.max) * 100, 100);
-                        return (
+                    {budgetStatus.length > 0 ? (
+                        budgetStatus.map((budget, index) => (
                             <div key={index} className="space-y-2">
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="font-semibold text-slate-200">{budget.name}</span>
                                     <div className="text-slate-400">
-                                        <span className="text-white font-bold">${budget.current}</span>
-                                        <span className="opacity-70"> / ${budget.max}</span>
+                                        <span className="text-white font-bold">₹{budget.current}</span>
+                                        <span className="opacity-70"> / ₹{budget.max}</span>
                                     </div>
                                 </div>
                                 {/* Progress Bar */}
                                 <div className="h-3 w-full bg-slate-700/50 rounded-full overflow-hidden">
                                     <div
-                                        style={{ width: `${percentage}%` }}
+                                        style={{ width: `${budget.percentage}%` }}
                                         className={`h-full rounded-full transition-all duration-500 ${budget.color}`}
                                     ></div>
                                 </div>
-                                <p className={`text-xs ${budget.text} font-medium`}>{budget.status}</p>
+                                <p className={`text-xs ${budget.textColor} font-medium`}>{budget.status}</p>
                             </div>
-                        );
-                    })}
+                        ))
+                    ) : (
+                        <div className="col-span-full text-center text-slate-400">
+                            No budgets set. Go to the <a href="/dashboard/budgets" className="text-primary-500 hover:underline">Budgets page</a> to set them up!
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -6,9 +6,13 @@ import DashboardLayout from "./components/DashboardLayout";
 import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import Dashboard from "./pages/Dashboard";
+import Budgets from "./pages/Budgets";
+import Transactions from "./pages/Transactions";
+
+import { useAuth } from "./context/AuthContext";
 
 function App() {
-  const isAuthenticated = localStorage.getItem("isAuthenticated");
+  const { isAuthenticated } = useAuth();
 
   return (
     <BrowserRouter>
@@ -36,6 +40,8 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="reports" element={<Reports />} />
           <Route path="overview" element={<Dashboard />} />
+          <Route path="budgets" element={<Budgets />} />
+          <Route path="transactions" element={<Transactions />} />
           <Route index element={<Navigate to="overview" replace />} />
         </Route>
 

@@ -43,6 +43,12 @@ const userSchema = new mongoose.Schema(
       required: [true, "Password is required"],
       minlength: 6,
     },
+    budgets: [
+      {
+        category: { type: String, required: true },
+        amount: { type: Number, required: true, default: 0 },
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -102,6 +108,7 @@ app.post("/api/auth/signup", async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      budgets: [], // Initialize empty budgets
     });
 
     // Create token
@@ -116,6 +123,7 @@ app.post("/api/auth/signup", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        budgets: user.budgets,
       },
     });
   } catch (error) {
@@ -158,6 +166,7 @@ app.post("/api/auth/login", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        budgets: user.budgets || [],
       },
     });
   } catch (error) {
@@ -175,6 +184,82 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
     return res.json({ user });
   } catch (error) {
     console.error("Get user error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// 👤 Update Current User Profile
+app.put("/api/auth/profile", authMiddleware, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    // Validation
+    if (!name || !email) {
+      return res.status(400).json({ message: "Name and email are required" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Check if email is being changed and if it's already taken
+    if (email !== user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
+    }
+
+    user.name = name;
+    user.email = email;
+    await user.save();
+
+    return res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        budgets: user.budgets
+      },
+      message: "Profile updated successfully"
+    });
+  } catch (error) {
+    console.error("Update profile error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// 💰 Budgets Routes
+
+// Get Budgets
+app.get("/api/budgets", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("budgets");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    return res.json(user.budgets || []);
+  } catch (error) {
+    console.error("Get budgets error:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update Budgets
+app.post("/api/budgets", authMiddleware, async (req, res) => {
+  try {
+    const { budgets } = req.body; // Expects array: [{category, amount}, ...]
+
+    if (!Array.isArray(budgets)) {
+      return res.status(400).json({ message: "Budgets must be an array" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.budgets = budgets;
+    await user.save();
+
+    return res.json(user.budgets);
+  } catch (error) {
+    console.error("Update budgets error:", error.message);
     return res.status(500).json({ message: "Server error" });
   }
 });

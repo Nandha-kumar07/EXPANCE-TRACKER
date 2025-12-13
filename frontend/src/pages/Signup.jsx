@@ -1,6 +1,7 @@
 // src/pages/Signup.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import AuthLayout from "../components/AuthLayout";
 import API from "../api";
 
@@ -15,6 +16,7 @@ export default function Signup() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const validateForm = () => {
     const newErrors = {};
@@ -56,9 +58,7 @@ export default function Signup() {
         password: formData.password
       });
 
-      localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      login(data.token, data.user);
       navigate("/dashboard");
     } catch (error) {
       console.error("Signup failed:", error);
