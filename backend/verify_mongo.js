@@ -10,10 +10,10 @@ const testConnection = async () => {
       throw new Error("MONGO_URI not found in .env");
     }
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ MongoDB Connection Successful!");
+    console.log(" MongoDB Connection Successful!");
     process.exit(0);
   } catch (error) {
-    console.error("❌ MongoDB Connection Failed:", error.message);
+    console.error(" MongoDB Connection Failed:", error.message);
     process.exit(1);
   }
 };

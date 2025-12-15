@@ -14,3 +14,24 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+
+
+
+
+
+
+
+*************************************************************************************************************************************************************************************************
+# 1. Configure environment
+cd backend && cp .env.example .env
+cd ../frontend && cp .env.example .env
+# 2. Start everything
+docker-compose up --build
+
+
+📍 Access:
+
+Frontend: http://localhost:5173
+Backend: http://localhost:5000
+MongoDB: localhost:27017

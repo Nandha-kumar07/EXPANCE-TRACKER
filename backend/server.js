@@ -6,8 +6,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { OAuth2Client } from "google-auth-library";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
+
+// 🤖 Initialize Google Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 const app = express();
 
@@ -489,15 +494,19 @@ const transporter = nodemailer.createTransport({
 // Helper to send email
 const sendEmail = async (to, subject, text) => {
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to,
       subject,
       text,
     });
-    console.log(`📧 Email sent to ${to}`);
+    console.log(`📧 Email sent successfully to ${to}`);
+    console.log(`📧 Message ID: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("❌ Email error:", error);
+    console.error("❌ Email sending failed:", error.message);
+    console.error("❌ Full error:", error);
+    throw error; // Re-throw to handle in the route
   }
 };
 
@@ -558,8 +567,15 @@ app.post("/api/auth/verify-request", async (req, res) => {
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     // Generate reset token
     const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
@@ -569,9 +585,24 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 
     // Send email
     const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
-    await sendEmail(user.email, "Password Reset Request", `Click here to reset your password: ${resetUrl}`);
+    const emailText = `Hello ${user.name},\n\nYou requested a password reset for your Expense Tracker account.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nExpense Tracker Team`;
 
-    return res.json({ message: "Password reset link sent to email" });
+    try {
+      await sendEmail(user.email, "Password Reset Request - Expense Tracker", emailText);
+      console.log(`✅ Password reset email sent to ${user.email}`);
+      return res.json({ message: "Password reset link sent to email" });
+    } catch (emailError) {
+      console.error("❌ Failed to send email:", emailError.message);
+      // Clear the reset token since email failed
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+
+      return res.status(500).json({
+        message: "Failed to send email. Please check server email configuration.",
+        error: emailError.message
+      });
+    }
   } catch (error) {
     console.error("Forgot Password Error:", error);
     return res.status(500).json({ message: "Server error" });
@@ -628,10 +659,130 @@ app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// 🌐 Start Server
+
+app.post("/api/chatbot/message", authMiddleware, async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ message: "Message is required" });
+    }
+
+    
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        message: "AI service not configured. Please add GEMINI_API_KEY to environment variables."
+      });
+    }
+
+
+    const transactions = await Transaction.find({ userId: req.user.id })
+      .sort({ date: -1 })
+      .limit(50); 
+
+    const user = await User.findById(req.user.id).select("name budgets");
+
+    
+    const totalExpenses = transactions
+      .filter(t => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalIncome = transactions
+      .filter(t => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expensesByCategory = transactions
+      .filter(t => t.type === "expense")
+      .reduce((acc, t) => {
+        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        return acc;
+      }, {});
+
+  
+    const contextPrompt = `You are a helpful financial assistant for ${user.name}'s expense tracker app.
+
+USER'S FINANCIAL SUMMARY:
+- Total Income: $${totalIncome.toFixed(2)}
+- Total Expenses: $${totalExpenses.toFixed(2)}
+- Net Balance: $${(totalIncome - totalExpenses).toFixed(2)}
+- Number of Transactions: ${transactions.length}
+
+EXPENSES BY CATEGORY:
+${Object.entries(expensesByCategory)
+        .map(([cat, amt]) => `- ${cat}: $${amt.toFixed(2)}`)
+        .join('\n')}
+
+${user.budgets && user.budgets.length > 0 ? `BUDGETS:
+${user.budgets.map(b => `- ${b.category}: $${b.amount}`).join('\n')}` : ''}
+
+RECENT TRANSACTIONS (last 10):
+${transactions.slice(0, 10).map(t =>
+          `- ${t.date.toLocaleDateString()}: ${t.type === 'expense' ? '-' : '+'}$${t.amount} (${t.category})${t.description ? ' - ' + t.description : ''}`
+        ).join('\n')}
+
+ ${message}`;
+
+    
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    
+    const chatHistory = conversationHistory.map(msg => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }]
+    }));
+
+    const chat = model.startChat({
+      history: chatHistory,
+      generationConfig: {
+        maxOutputTokens: 500,
+        temperature: 0.7,
+      },
+    });
+
+    const result = await chat.sendMessage(contextPrompt);
+    const response = await result.response;
+    const aiReply = response.text();
+
+    const suggestions = [];
+    if (totalExpenses > totalIncome) {
+      suggestions.push("How can I reduce my expenses?");
+    }
+    if (Object.keys(expensesByCategory).length > 0) {
+      const topCategory = Object.entries(expensesByCategory)
+        .sort(([, a], [, b]) => b - a)[0][0];
+      suggestions.push(`Tips for managing ${topCategory} expenses`);
+    }
+    if (!user.budgets || user.budgets.length === 0) {
+      suggestions.push("Help me create a budget");
+    }
+
+    return res.json({
+      reply: aiReply,
+      suggestions: suggestions.slice(0, 3) 
+    });
+
+  } catch (error) {
+    console.error("Chatbot error:", error);
+
+  
+    if (error.message?.includes("API key")) {
+      return res.status(500).json({
+        message: "Invalid API key. Please check your GEMINI_API_KEY configuration."
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to get AI response. Please try again.",
+      error: error.message
+    });
+  }
+});
+
+
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log("🚀 Server updated with error logging and JWT_SECRET");
+  console.log(` Server running on port ${PORT}`);
+  console.log(" Server updated with error logging and JWT_SECRET");
 });

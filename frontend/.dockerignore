@@ -1,0 +1,24 @@
+
+node_modules
+npm-debug.log
+
+
+dist
+build
+
+
+.env
+.env.local
+.env.*.local
+
+
+.git
+.gitignore
+
+# Ignore documentation
+*.md
+!README.md
+
+# Ignore test files
+**/*.test.js
+**/*.spec.js

@@ -11,8 +11,10 @@ import Transactions from "./pages/Transactions";
 import Notes from "./pages/Notes";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ChatBot from "./components/ChatBot";
 
 import { useAuth } from "./context/AuthContext";
+
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -63,6 +65,9 @@ function App() {
           }
         />
       </Routes>
+
+      {/* AI Chatbot - Shows on all authenticated pages */}
+      {isAuthenticated && <ChatBot />}
     </BrowserRouter>
   );
 }
