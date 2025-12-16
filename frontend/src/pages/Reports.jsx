@@ -177,7 +177,7 @@ export default function Reports() {
                         </div>
                     </div>
 
-                    <div className="h-64 flex flex-col sm:flex-row items-center justify-center gap-8">
+                    <div className="h-64 min-h-[300px] flex flex-col sm:flex-row items-center justify-center gap-8">
                         {/* Chart */}
                         <div className="w-48 h-48 relative">
                             <ResponsiveContainer width="100%" height="100%">
@@ -227,7 +227,7 @@ export default function Reports() {
                         <p className="text-xs text-slate-500 mt-1">Last 3 Months</p>
                     </div>
 
-                    <div className="h-64">
+                    <div className="h-64 min-h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={trendData}>
                                 <defs>

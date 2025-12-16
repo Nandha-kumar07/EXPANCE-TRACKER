@@ -179,7 +179,7 @@ export default function Dashboard() {
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-white">Monthly Spending Breakdown</h3>
           </div>
-          <div className="h-64">
+          <div className="h-64 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} barSize={40}>
                 <Tooltip
