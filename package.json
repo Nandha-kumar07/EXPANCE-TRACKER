@@ -1,0 +1,17 @@
+{
+  "name": "expense-tracker",
+  "version": "1.0.0",
+  "description": "Expense Tracker Full-Stack Application",
+  "main": "index.js",
+  "scripts": {
+    "build": "cd frontend && yarn build",
+    "start": "cd backend && node server.js",
+    "dev": "concurrently \"cd backend && yarn dev\" \"cd frontend && yarn dev\""
+  },
+  "keywords": ["expense", "tracker", "react", "express", "mongodb"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

@@ -66,7 +66,6 @@ function App() {
         />
       </Routes>
 
-      {/* AI Chatbot - Shows on all authenticated pages */}
       {isAuthenticated && <ChatBot />}
     </BrowserRouter>
   );

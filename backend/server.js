@@ -7,31 +7,31 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { OAuth2Client } from "google-auth-library";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// 🤖 Initialize Google Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 
 const app = express();
 
-// 🔧 Middlewares
+// middlewares
 app.use(express.json());
 app.use(
   cors({
-    origin: "http://localhost:5173", // your Vite frontend
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   })
 );
 
-// 🧵 Connect MongoDB
+// connect mongodb
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err.message));
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.error("MongoDB Error:", err.message));
 
-// 👤 User Schema & Model
+// user schema
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -70,10 +70,10 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.model("User", userSchema);
 
-// 🔑 Auth Middleware (Protect Routes)
+// auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization; // "Bearer token"
+    const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ message: "No token, authorization denied" });
     }
@@ -81,7 +81,7 @@ const authMiddleware = async (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id: ... }
+    req.user = decoded;
     next();
   } catch (error) {
     console.error("Auth error:", error.message);
@@ -89,24 +89,20 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// 📌 Routes
+// routes
 
-// Health check
 app.get("/", (req, res) => {
   res.json({ message: "API is running..." });
 });
 
-// 📝 Signup Route
 app.post("/api/auth/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Basic validation
     if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // Check existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res
@@ -114,19 +110,16 @@ app.post("/api/auth/signup", async (req, res) => {
         .json({ message: "User already exists with this email" });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      budgets: [], // Initialize empty budgets
+      budgets: [],
     });
 
-    // Create token
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -147,29 +140,24 @@ app.post("/api/auth/signup", async (req, res) => {
   }
 });
 
-// 🔓 Login Route
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Basic validation
     if (!email || !password) {
       return res.status(400).json({ message: "Email & password required" });
     }
 
-    // Find user
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Create token
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -190,7 +178,6 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// 👤 Get Current User (Protected)
 app.get("/api/auth/me", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
@@ -203,12 +190,10 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
   }
 });
 
-// 👤 Update Current User Profile
 app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   try {
     const { name, email } = req.body;
 
-    // Validation
     if (!name || !email) {
       return res.status(400).json({ message: "Name and email are required" });
     }
@@ -216,7 +201,6 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Check if email is being changed and if it's already taken
     if (email !== user.email) {
       const existingUser = await User.findOne({ email });
       if (existingUser) {
@@ -243,9 +227,8 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   }
 });
 
-// 💰 Budgets Routes
+// budgets routes
 
-// Get Budgets
 app.get("/api/budgets", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("budgets");
@@ -257,10 +240,9 @@ app.get("/api/budgets", authMiddleware, async (req, res) => {
   }
 });
 
-// Update Budgets
 app.post("/api/budgets", authMiddleware, async (req, res) => {
   try {
-    const { budgets } = req.body; // Expects array: [{category, amount}, ...]
+    const { budgets } = req.body;
 
     if (!Array.isArray(budgets)) {
       return res.status(400).json({ message: "Budgets must be an array" });
@@ -279,7 +261,7 @@ app.post("/api/budgets", authMiddleware, async (req, res) => {
   }
 });
 
-// 💸 Transaction Schema & Model
+// transaction schema
 const transactionSchema = new mongoose.Schema(
   {
     userId: {
@@ -308,18 +290,15 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    receiptUrl: {
-      type: String, // Future support for file uploads
-    },
+    receiptUrl: String,
   },
   { timestamps: true }
 );
 
 const Transaction = mongoose.model("Transaction", transactionSchema);
 
-// 💸 Transaction Routes
+// transaction routes
 
-// Create Transaction
 app.post("/api/transactions", authMiddleware, async (req, res) => {
   try {
     const { type, amount, date, category, description } = req.body;
@@ -344,10 +323,8 @@ app.post("/api/transactions", authMiddleware, async (req, res) => {
   }
 });
 
-// Get All Transactions for User
 app.get("/api/transactions", authMiddleware, async (req, res) => {
   try {
-    // Sort by date descending
     const transactions = await Transaction.find({ userId: req.user.id }).sort({
       date: -1,
     });
@@ -358,7 +335,6 @@ app.get("/api/transactions", authMiddleware, async (req, res) => {
   }
 });
 
-// Delete Transaction
 app.delete("/api/transactions/:id", authMiddleware, async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id);
@@ -367,7 +343,6 @@ app.delete("/api/transactions/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Transaction not found" });
     }
 
-    // Ensure user owns the transaction
     if (transaction.userId.toString() !== req.user.id) {
       return res.status(401).json({ message: "Not authorized" });
     }
@@ -380,7 +355,7 @@ app.delete("/api/transactions/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// 📝 Note Schema & Model
+// note schema
 const noteSchema = new mongoose.Schema(
   {
     userId: {
@@ -404,7 +379,7 @@ const noteSchema = new mongoose.Schema(
     },
     color: {
       type: String,
-      default: "#ffffff", // Default white, can be changed for UI
+      default: "#ffffff",
     },
   },
   { timestamps: true }
@@ -412,9 +387,8 @@ const noteSchema = new mongoose.Schema(
 
 const Note = mongoose.model("Note", noteSchema);
 
-// 📝 Note Routes
+// note routes
 
-// Create Note
 app.post("/api/notes", authMiddleware, async (req, res) => {
   try {
     const { title, content, tags, color, isPinned } = req.body;
@@ -428,7 +402,7 @@ app.post("/api/notes", authMiddleware, async (req, res) => {
       title,
       content,
       tags: tags || [],
-      color: color || "#1e293b", // Default dark theme card color
+      color: color || "#1e293b",
       isPinned: isPinned || false,
     });
 
@@ -439,10 +413,8 @@ app.post("/api/notes", authMiddleware, async (req, res) => {
   }
 });
 
-// Get All Notes for User
 app.get("/api/notes", authMiddleware, async (req, res) => {
   try {
-    // Sort by pinned first, then by date descending
     const notes = await Note.find({ userId: req.user.id }).sort({
       isPinned: -1,
       updatedAt: -1,
@@ -454,7 +426,6 @@ app.get("/api/notes", authMiddleware, async (req, res) => {
   }
 });
 
-// Update Note
 app.put("/api/notes/:id", authMiddleware, async (req, res) => {
   try {
     const { title, content, tags, color, isPinned } = req.body;
@@ -482,163 +453,6 @@ app.put("/api/notes/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// 📧 Email Transporter
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-// Helper to send email
-const sendEmail = async (to, subject, text) => {
-  try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to,
-      subject,
-      text,
-    });
-    console.log(`📧 Email sent successfully to ${to}`);
-    console.log(`📧 Message ID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("❌ Email sending failed:", error.message);
-    console.error("❌ Full error:", error);
-    throw error; // Re-throw to handle in the route
-  }
-};
-
-// -----------------------------------------------------------------------------
-// 🔐 Auth Routes (Google & Email)
-// -----------------------------------------------------------------------------
-
-// Google Sign-In
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-app.post("/api/auth/google", async (req, res) => {
-  try {
-    const { token } = req.body;
-
-    // Verify Access Token (not ID Token)
-    const tokenInfo = await client.getTokenInfo(token);
-    const { email } = tokenInfo;
-
-    // Get user profile info (name, picture) using the access token
-    const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
-    const data = await response.json();
-    const { name, sub } = data;
-
-    let user = await User.findOne({ email });
-
-    if (user) {
-      if (!user.googleId) {
-        user.googleId = sub;
-        await user.save();
-      }
-    } else {
-      user = await User.create({
-        name,
-        email,
-        password: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
-        googleId: sub,
-        isVerified: true, // Google users are verified by default
-      });
-    }
-
-    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token: jwtToken, user: { id: user._id, name: user.name, email: user.email, budgets: user.budgets } });
-
-  } catch (error) {
-    console.error("Google Auth Error:", error);
-    return res.status(401).json({ message: "Google Authentication Failed" });
-  }
-});
-
-// Email Verification
-app.post("/api/auth/verify-request", async (req, res) => {
-  // Logic to send verification token (random string) via email
-  // Pending implementation based on user flow preference
-  res.status(501).json({ message: "Not implemented yet" });
-});
-
-// Forgot Password
-app.post("/api/auth/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Generate reset token
-    const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-    await user.save();
-
-    // Send email
-    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
-    const emailText = `Hello ${user.name},\n\nYou requested a password reset for your Expense Tracker account.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nExpense Tracker Team`;
-
-    try {
-      await sendEmail(user.email, "Password Reset Request - Expense Tracker", emailText);
-      console.log(`✅ Password reset email sent to ${user.email}`);
-      return res.json({ message: "Password reset link sent to email" });
-    } catch (emailError) {
-      console.error("❌ Failed to send email:", emailError.message);
-      // Clear the reset token since email failed
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
-      await user.save();
-
-      return res.status(500).json({
-        message: "Failed to send email. Please check server email configuration.",
-        error: emailError.message
-      });
-    }
-  } catch (error) {
-    console.error("Forgot Password Error:", error);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Reset Password
-app.post("/api/auth/reset-password", async (req, res) => {
-  try {
-    const { token, newPassword } = req.body;
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({
-      _id: decoded.id,
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
-
-    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
-
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
-    await user.save();
-
-    return res.json({ message: "Password reset successfully" });
-  } catch (error) {
-    console.error("Reset Password Error:", error);
-    return res.status(400).json({ message: "Invalid token" });
-  }
-});
-
-// Delete Note
 app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
   try {
     const note = await Note.findById(req.params.id);
@@ -659,6 +473,140 @@ app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// email transporter
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+const sendEmail = async (to, subject, text) => {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    });
+    console.log(`Email sent successfully to ${to}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Email sending failed:", error.message);
+    throw error;
+  }
+};
+
+// google login
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+app.post("/api/auth/google", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    const tokenInfo = await client.getTokenInfo(token);
+    const { email } = tokenInfo;
+
+    const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
+    const data = await response.json();
+    const { name, sub } = data;
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = sub;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name,
+        email,
+        password: await bcrypt.hash(Math.random().toString(36), 10),
+        googleId: sub,
+        isVerified: true,
+      });
+    }
+
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token: jwtToken, user: { id: user._id, name: user.name, email: user.email, budgets: user.budgets } });
+
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    return res.status(401).json({ message: "Google Authentication Failed" });
+  }
+});
+
+app.post("/api/auth/verify-request", async (req, res) => {
+  res.status(501).json({ message: "Not implemented yet" });
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000;
+    await user.save();
+
+    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+    const emailText = `Hello ${user.name},\n\nYou requested a password reset.\n\nClick link to reset:\n${resetUrl}\n\nThanks,\nExpense Tracker`;
+
+    try {
+      await sendEmail(user.email, "Password Reset - Expense Tracker", emailText);
+      return res.json({ message: "Password reset link sent to email" });
+    } catch (emailError) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+
+      return res.status(500).json({
+        message: "Failed to send email.",
+        error: emailError.message
+      });
+    }
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({
+      _id: decoded.id,
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset Password Error:", error);
+    return res.status(400).json({ message: "Invalid token" });
+  }
+});
 
 app.post("/api/chatbot/message", authMiddleware, async (req, res) => {
   try {
@@ -668,21 +616,18 @@ app.post("/api/chatbot/message", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: "Message is required" });
     }
 
-    
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
-        message: "AI service not configured. Please add GEMINI_API_KEY to environment variables."
+        message: "AI service not configured."
       });
     }
 
-
     const transactions = await Transaction.find({ userId: req.user.id })
       .sort({ date: -1 })
-      .limit(50); 
+      .limit(50);
 
     const user = await User.findById(req.user.id).select("name budgets");
 
-    
     const totalExpenses = transactions
       .filter(t => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
@@ -698,34 +643,15 @@ app.post("/api/chatbot/message", authMiddleware, async (req, res) => {
         return acc;
       }, {});
 
-  
-    const contextPrompt = `You are a helpful financial assistant for ${user.name}'s expense tracker app.
-
-USER'S FINANCIAL SUMMARY:
-- Total Income: $${totalIncome.toFixed(2)}
-- Total Expenses: $${totalExpenses.toFixed(2)}
-- Net Balance: $${(totalIncome - totalExpenses).toFixed(2)}
-- Number of Transactions: ${transactions.length}
-
-EXPENSES BY CATEGORY:
-${Object.entries(expensesByCategory)
-        .map(([cat, amt]) => `- ${cat}: $${amt.toFixed(2)}`)
-        .join('\n')}
-
-${user.budgets && user.budgets.length > 0 ? `BUDGETS:
-${user.budgets.map(b => `- ${b.category}: $${b.amount}`).join('\n')}` : ''}
-
-RECENT TRANSACTIONS (last 10):
-${transactions.slice(0, 10).map(t =>
-          `- ${t.date.toLocaleDateString()}: ${t.type === 'expense' ? '-' : '+'}$${t.amount} (${t.category})${t.description ? ' - ' + t.description : ''}`
-        ).join('\n')}
-
- ${message}`;
-
+    const contextPrompt = `You are a financial assistant for ${user.name}.
+    Income: $${totalIncome}
+    Expenses: $${totalExpenses}
+    Balance: $${totalIncome - totalExpenses}
     
+    User message: ${message}`;
+
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    
     const chatHistory = conversationHistory.map(msg => ({
       role: msg.role === "user" ? "user" : "model",
       parts: [{ text: msg.content }]
@@ -743,46 +669,30 @@ ${transactions.slice(0, 10).map(t =>
     const response = await result.response;
     const aiReply = response.text();
 
-    const suggestions = [];
-    if (totalExpenses > totalIncome) {
-      suggestions.push("How can I reduce my expenses?");
-    }
-    if (Object.keys(expensesByCategory).length > 0) {
-      const topCategory = Object.entries(expensesByCategory)
-        .sort(([, a], [, b]) => b - a)[0][0];
-      suggestions.push(`Tips for managing ${topCategory} expenses`);
-    }
-    if (!user.budgets || user.budgets.length === 0) {
-      suggestions.push("Help me create a budget");
-    }
-
     return res.json({
       reply: aiReply,
-      suggestions: suggestions.slice(0, 3) 
+      suggestions: []
     });
 
   } catch (error) {
     console.error("Chatbot error:", error);
-
-  
-    if (error.message?.includes("API key")) {
-      return res.status(500).json({
-        message: "Invalid API key. Please check your GEMINI_API_KEY configuration."
-      });
-    }
-
     return res.status(500).json({
-      message: "Failed to get AI response. Please try again.",
+      message: "Failed to get AI response.",
       error: error.message
     });
   }
 });
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+});
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(` Server running on port ${PORT}`);
-  console.log(" Server updated with error logging and JWT_SECRET");
+  console.log(`Server running on port ${PORT}`);
 });

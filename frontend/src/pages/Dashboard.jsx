@@ -45,11 +45,8 @@ export default function Dashboard() {
       if (tx.type === 'income') {
         income += amt;
       } else {
-        // expense: commonly stored as positive number in DB but treated as outflow?
-
         expense += amt;
 
-        // Group for chart
         if (expenseByCategory[tx.category]) {
           expenseByCategory[tx.category] += amt;
         } else {
@@ -90,17 +87,13 @@ export default function Dashboard() {
 
   // Icon helper
   const getIcon = (category) => {
-    // Simple mapping or return a generic default
-    // We can also switch on 'icon' field if backend provides it, 
-    // but the schema didn't seem to have an 'icon' field, just 'category'.
-    // We can map category names to icons.
     switch (category?.toLowerCase()) {
       case 'groceries': return 'cart';
       case 'transport': return 'train';
       case 'utilities': return 'bolt';
       case 'dining': return 'food';
       case 'income': return 'bill';
-      default: return 'bill'; // default
+      default: return 'bill';
     }
   };
 

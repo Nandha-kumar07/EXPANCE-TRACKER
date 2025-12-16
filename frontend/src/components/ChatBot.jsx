@@ -7,7 +7,7 @@ const ChatBot = () => {
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
-            content: '👋 Hi! I\'m your AI financial assistant. Ask me anything about your expenses, income, or financial goals!',
+            content: '👋 Hi! I\'m your financial assistant. Ask me anything about your expenses!',
             timestamp: new Date()
         }
     ]);
@@ -17,7 +17,6 @@ const ChatBot = () => {
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // Auto-scroll to bottom when new messages arrive
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -26,7 +25,6 @@ const ChatBot = () => {
         scrollToBottom();
     }, [messages]);
 
-    // Focus input when chat opens
     useEffect(() => {
         if (isOpen) {
             inputRef.current?.focus();
@@ -49,7 +47,6 @@ const ChatBot = () => {
         try {
             const token = localStorage.getItem('token');
 
-            // Build conversation history (last 10 messages for context)
             const conversationHistory = messages.slice(-10).map(msg => ({
                 role: msg.role === 'assistant' ? 'assistant' : 'user',
                 content: msg.content
@@ -76,7 +73,6 @@ const ChatBot = () => {
 
             setMessages(prev => [...prev, assistantMessage]);
 
-            // Update suggestions if provided
             if (response.data.suggestions && response.data.suggestions.length > 0) {
                 setSuggestions(response.data.suggestions);
             }
@@ -111,11 +107,10 @@ const ChatBot = () => {
 
     return (
         <>
-            {/* Floating Chat Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full shadow-2xl hover:shadow-purple-500/50 hover:scale-110 transition-all duration-300 flex items-center justify-center z-50 group"
-                aria-label="Toggle AI Assistant"
+                aria-label="Toggle Assistant"
             >
                 {isOpen ? (
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,16 +122,13 @@ const ChatBot = () => {
                     </svg>
                 )}
 
-                {/* Pulse animation */}
                 <span className="absolute inset-0 rounded-full bg-purple-500 animate-ping opacity-20"></span>
             </button>
 
-            {/* Chat Window */}
             <div
                 className={`fixed bottom-24 right-6 w-[400px] h-[600px] bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 flex flex-col overflow-hidden transition-all duration-300 z-50 ${isOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'
                     }`}
             >
-                {/* Header */}
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
@@ -145,8 +137,7 @@ const ChatBot = () => {
                             </svg>
                         </div>
                         <div>
-                            <h3 className="font-semibold text-lg">AI Financial Assistant</h3>
-                            <p className="text-xs text-white/80">Powered by Gemini</p>
+                            <h3 className="font-semibold text-lg">Financial Assistant</h3>
                         </div>
                     </div>
                     <button
@@ -159,7 +150,6 @@ const ChatBot = () => {
                     </button>
                 </div>
 
-                {/* Messages Container */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-br from-blue-50/50 to-purple-50/50">
                     {messages.map((msg, index) => (
                         <div
@@ -168,10 +158,10 @@ const ChatBot = () => {
                         >
                             <div
                                 className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-md ${msg.role === 'user'
-                                        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-br-sm'
-                                        : msg.isError
-                                            ? 'bg-red-100 text-red-800 border border-red-200 rounded-bl-sm'
-                                            : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
+                                    ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-br-sm'
+                                    : msg.isError
+                                        ? 'bg-red-100 text-red-800 border border-red-200 rounded-bl-sm'
+                                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                                     }`}
                             >
                                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -182,7 +172,6 @@ const ChatBot = () => {
                         </div>
                     ))}
 
-                    {/* Loading Indicator */}
                     {isLoading && (
                         <div className="flex justify-start animate-slideIn">
                             <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-md border border-gray-200">
@@ -198,7 +187,6 @@ const ChatBot = () => {
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Suggestions */}
                 {suggestions.length > 0 && !isLoading && (
                     <div className="px-4 py-2 bg-white/50 border-t border-gray-200">
                         <p className="text-xs text-gray-600 mb-2">Suggested questions:</p>
@@ -216,7 +204,6 @@ const ChatBot = () => {
                     </div>
                 )}
 
-                {/* Input Area */}
                 <div className="p-4 bg-white border-t border-gray-200">
                     <div className="flex gap-2">
                         <input
