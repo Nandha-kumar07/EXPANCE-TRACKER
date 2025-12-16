@@ -685,11 +685,20 @@ app.post("/api/chatbot/message", authMiddleware, async (req, res) => {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-});
+// Only serve frontend if it exists (for local dev or monolithic build)
+// On Render (backend only), this will be skipped if folder is missing
+if (process.env.NODE_ENV === 'production') {
+  // app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  // app.get("*", (req, res) => {
+  //   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+  // });
+} else {
+  app.get("/", (req, res) => {
+    res.json({ message: "API is running..." });
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 
