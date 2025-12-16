@@ -1,6 +1,6 @@
 // src/components/ChatBot.jsx
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import API from '../api';
 
 const ChatBot = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -45,25 +45,15 @@ const ChatBot = () => {
         setIsLoading(true);
 
         try {
-            const token = localStorage.getItem('token');
-
             const conversationHistory = messages.slice(-10).map(msg => ({
                 role: msg.role === 'assistant' ? 'assistant' : 'user',
                 content: msg.content
             }));
 
-            const response = await axios.post(
-                'http://localhost:5000/api/chatbot/message',
-                {
-                    message: messageText.trim(),
-                    conversationHistory
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                }
-            );
+            const response = await API.post('/chatbot/message', {
+                message: messageText.trim(),
+                conversationHistory
+            });
 
             const assistantMessage = {
                 role: 'assistant',
