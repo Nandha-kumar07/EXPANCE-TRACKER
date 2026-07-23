@@ -127,7 +127,7 @@ resource "aws_instance" "expense_tracker_server" {
 
               echo "=== Writing .env file ==="
               cat > /home/ubuntu/app/backend/.env << 'ENVEOF'
-              DATABASE_URL=postgresql://postgres:Nandhakumar@07@db.vxsdmovhbmkpbdfykkqf.supabase.co:5432/postgres
+              DATABASE_URL=postgresql://postgres.vxsdmovhbmkpbdfykkqf:Nandhakumar%4007@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres
               JWT_SECRET=expense_tracker_secret_key_2024
               PORT=5000
               GEMINI_API_KEY=REPLACE_WITH_YOUR_GEMINI_API_KEY

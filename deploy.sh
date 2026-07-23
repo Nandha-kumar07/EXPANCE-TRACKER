@@ -63,7 +63,7 @@ ENV_FILE="$APP_DIR/backend/.env"
 # Only write if it doesn't exist yet (don't overwrite user edits)
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" << ENVEOF
-DATABASE_URL=postgresql://postgres:Nandhakumar@07@db.vxsdmovhbmkpbdfykkqf.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.vxsdmovhbmkpbdfykkqf:Nandhakumar%4007@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres
 JWT_SECRET=expense_tracker_secret_key_2024
 PORT=5000
 GEMINI_API_KEY=REPLACE_WITH_YOUR_GEMINI_API_KEY
