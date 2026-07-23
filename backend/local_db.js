@@ -13,11 +13,13 @@ if (!connectionString) {
 }
 
 // Pool config with SSL required for remote Supabase DB connectivity
+// family: 4 forces IPv4 to avoid ENETUNREACH on EC2 instances without IPv6
 const pool = new Pool({
   connectionString,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4
 });
 
 // Initialize database tables
