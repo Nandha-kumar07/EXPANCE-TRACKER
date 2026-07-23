@@ -28,6 +28,10 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+
+# Allow injecting API URL at build time (Vite bakes env vars in at build time)
+ARG VITE_API_URL=http://localhost:5000/api
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # Production nginx stage

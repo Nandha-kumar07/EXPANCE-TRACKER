@@ -1,14 +1,13 @@
 import express from "express";
 import dotenv from "dotenv";
-import mongoose from "mongoose";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
-import { OAuth2Client } from "google-auth-library";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import path from "path";
 import { fileURLToPath } from "url";
+import { User, Transaction, Note } from "./local_db.js";
 
 dotenv.config();
 
@@ -42,50 +41,9 @@ app.use(
   })
 );
 
-// connect mongodb
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error("MongoDB Error:", err.message));
+// Local database data is loaded on-demand by local_db.js
 
-// user schema
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Name is required"],
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: 6,
-    },
-    budgets: [
-      {
-        category: { type: String, required: true },
-        amount: { type: Number, required: true, default: 0 },
-      },
-    ],
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-    verificationToken: String,
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
-    googleId: String,
-  },
-  { timestamps: true }
-);
-
-const User = mongoose.model("User", userSchema);
+// User model is imported from local_db.js
 
 // auth middleware
 const authMiddleware = async (req, res, next) => {
@@ -278,41 +236,7 @@ app.post("/api/budgets", authMiddleware, async (req, res) => {
   }
 });
 
-// transaction schema
-const transactionSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    type: {
-      type: String,
-      enum: ["expense", "income"],
-      required: true,
-    },
-    amount: {
-      type: Number,
-      required: true,
-    },
-    date: {
-      type: Date,
-      required: true,
-    },
-    category: {
-      type: String,
-      required: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-    },
-    receiptUrl: String,
-  },
-  { timestamps: true }
-);
-
-const Transaction = mongoose.model("Transaction", transactionSchema);
+// Transaction model is imported from local_db.js
 
 // transaction routes
 
@@ -372,37 +296,7 @@ app.delete("/api/transactions/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// note schema
-const noteSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    content: {
-      type: String,
-      required: true,
-    },
-    tags: [String],
-    isPinned: {
-      type: Boolean,
-      default: false,
-    },
-    color: {
-      type: String,
-      default: "#ffffff",
-    },
-  },
-  { timestamps: true }
-);
-
-const Note = mongoose.model("Note", noteSchema);
+// Note model is imported from local_db.js
 
 // note routes
 
@@ -515,49 +409,6 @@ const sendEmail = async (to, subject, text) => {
   }
 };
 
-// google login
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-app.post("/api/auth/google", async (req, res) => {
-  try {
-    const { token } = req.body;
-
-    const tokenInfo = await client.getTokenInfo(token);
-    const { email } = tokenInfo;
-
-    const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
-    const data = await response.json();
-    const { name, sub } = data;
-
-    let user = await User.findOne({ email });
-
-    if (user) {
-      if (!user.googleId) {
-        user.googleId = sub;
-        await user.save();
-      }
-    } else {
-      user = await User.create({
-        name,
-        email,
-        password: await bcrypt.hash(Math.random().toString(36), 10),
-        googleId: sub,
-        isVerified: true,
-      });
-    }
-
-    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token: jwtToken, user: { id: user._id, name: user.name, email: user.email, budgets: user.budgets } });
-
-  } catch (error) {
-    console.error("Google Auth Error:", error);
-    return res.status(401).json({ message: "Google Authentication Failed" });
-  }
-});
-
-app.post("/api/auth/verify-request", async (req, res) => {
-  res.status(501).json({ message: "Not implemented yet" });
-});
 
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {

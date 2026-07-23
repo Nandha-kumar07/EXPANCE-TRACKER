@@ -9,6 +9,7 @@ export default function Reports() {
     const [totalSpending, setTotalSpending] = useState(0);
     const [budgets, setBudgets] = useState([]);
     const [budgetStatus, setBudgetStatus] = useState([]);
+    const [trendData, setTrendData] = useState([]);
 
     const COLORS = ['#10b981', '#f59e0b', '#0ea5e9', '#6366f1', '#3b82f6', '#64748b'];
 
@@ -86,6 +87,48 @@ export default function Reports() {
         }));
         setCategoryData(catData);
 
+        // Process Trend Data
+        let newTrendData = [];
+        if (activeTab === 'This Month') {
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const dailyData = Array(daysInMonth).fill(0);
+            filteredTxs.forEach(tx => {
+                if (tx.type === 'expense') {
+                    const day = new Date(tx.date).getDate();
+                    dailyData[day - 1] += Number(tx.amount);
+                }
+            });
+            newTrendData = dailyData.map((val, index) => ({ name: `${index + 1}`, value: val }));
+        } else if (activeTab === 'Last 3 Months') {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const monthDataMap = {};
+            for (let i = 2; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                monthDataMap[`${monthNames[d.getMonth()]} '${d.getFullYear().toString().substr(2)}`] = 0;
+            }
+            filteredTxs.forEach(tx => {
+                if (tx.type === 'expense') {
+                    const txDate = new Date(tx.date);
+                    const key = `${monthNames[txDate.getMonth()]} '${txDate.getFullYear().toString().substr(2)}`;
+                    if (monthDataMap[key] !== undefined) {
+                        monthDataMap[key] += Number(tx.amount);
+                    }
+                }
+            });
+            newTrendData = Object.keys(monthDataMap).map(key => ({ name: key, value: monthDataMap[key] }));
+        } else if (activeTab === 'This Year' || activeTab === 'Last Year') {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const monthData = monthNames.map(m => ({ name: m, value: 0 }));
+            filteredTxs.forEach(tx => {
+                if (tx.type === 'expense') {
+                    const txDate = new Date(tx.date);
+                    monthData[txDate.getMonth()].value += Number(tx.amount);
+                }
+            });
+            newTrendData = monthData;
+        }
+        setTrendData(newTrendData);
+
         // Prepare Budget Adherence Data
         // budgetList = [{ category: 'Groceries', amount: 5000 }, ...]
         const budgetAdherence = budgetList.map(b => {
@@ -122,16 +165,6 @@ export default function Reports() {
 
         setBudgetStatus(budgetAdherence);
     };
-
-    // Dummy Trend Data - In a real app, aggregation by month from txs date
-    const trendData = [
-        { name: 'Jan', value: 2400 },
-        { name: 'Feb', value: 3800 },
-        { name: 'Mar', value: 3200 },
-        { name: 'Apr', value: 4500 },
-        { name: 'May', value: 2100 },
-        { name: 'Jun', value: 5800 },
-    ];
 
     return (
         <div className="space-y-8 animate-fade-in pb-8">
@@ -218,13 +251,9 @@ export default function Reports() {
                     <div className="mb-6">
                         <h3 className="text-lg font-semibold text-white">Spending Trend</h3>
                         <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-3xl font-bold text-white">₹5,800.00</span>
-                            <span className="text-sm font-medium text-red-500 flex items-center">
-                                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                                -1.8%
-                            </span>
+                            <span className="text-3xl font-bold text-white">₹{totalSpending.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Last 3 Months</p>
+                        <p className="text-xs text-slate-500 mt-1">{activeTab}</p>
                     </div>
 
                     <div className="h-64 min-h-[300px]">
