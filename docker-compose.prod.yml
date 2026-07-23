@@ -23,8 +23,8 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        # API goes through nginx on port 80, which proxies to backend container
-        - VITE_API_URL=http://54.158.241.8/api
+        # Relative path /api allows the app to work on any EC2 IP or domain dynamically via Nginx reverse proxy
+        - VITE_API_URL=/api
     container_name: expense-tracker-frontend-prod
     restart: always
     ports:

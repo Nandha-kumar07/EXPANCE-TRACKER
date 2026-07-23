@@ -5,7 +5,7 @@
 # =============================================================
 set -e
 
-EC2_IP="54.158.241.8"
+EC2_IP="54.236.247.141"
 APP_DIR="/home/ubuntu/app"
 REPO_URL="https://github.com/Nandha-kumar07/EXPANCE-TRACKER.git"
 

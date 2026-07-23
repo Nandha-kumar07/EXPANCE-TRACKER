@@ -2,7 +2,9 @@
 # Run from your Windows machine to deploy to EC2 at 54.158.241.8
 # Usage: .\run-deploy.ps1
 
-$EC2_IP    = "54.158.241.8"
+param (
+    [string]$EC2_IP = "54.236.247.141"
+)
 $KEY_FILE  = ".\terraform\expense-tracker-key.pem"
 $SSH_USER  = "ubuntu"
 $DEPLOY_SH = ".\deploy.sh"
